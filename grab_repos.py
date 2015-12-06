@@ -1,10 +1,14 @@
 #!/usr/bin/env python
 
+__version__ = '0.1.0'
+
 import os
 import sys
 import json
 import pprint
 import shutil
+import socket
+import datetime
 import requests
 import subprocess
 
@@ -41,10 +45,20 @@ def want_repo(data):
 		return False
 	return True
 
+def get_iso_time():
+	return datetime.datetime.utcnow().isoformat().rsplit('.', 1)[0] + 'Z'
+
+def get_git_version():
+	return subprocess.check_output(['git', '--version']).strip()
+
 def clone(data):
 	url = "https://github.com/" + data['full_name']
 	out = "%d.git" % (data['id'],)
 	assert not os.path.exists(out), out
+	# For finding repos cloned by a specific problematic server
+	hostname = socket.gethostname()
+	fetched_at = get_iso_time()
+	git_version = get_git_version()
 	subprocess.check_call(["git", "clone", "--mirror", url, out])
 	assert os.path.isdir(out), out
 
@@ -56,7 +70,13 @@ def clone(data):
 	# Write out metadata
 	assert not os.path.exists(out + '/metadata.json'), out
 	with open(out + '/metadata.json', 'wb') as f:
-		json.dump({"api.github.com": data}, f)
+		json.dump({
+			"api.github.com": data,
+			"fetched_at": fetched_at,
+			"fetched_by": hostname,
+			"grab_version": __version__,
+			"git_version": git_version,
+		}, f)
 
 def main():
 	for id in sys.stdin:
