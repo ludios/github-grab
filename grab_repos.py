@@ -25,7 +25,10 @@ def filter_repo_metadata(orig):
 		data[u"owner"] = filter_repo_metadata(data[u"owner"])
 	return data
 
-class NoSuchRepo(Exception):
+class RepoNotFound(Exception):
+	pass
+
+class RepoAccessBlocked(Exception):
 	pass
 
 class MetadataError(Exception):
@@ -44,7 +47,10 @@ def get_repo_metadata(id):
 	data = json.loads(text)
 	if 'message' in data:
 		if data['message'] == 'Not Found':
-			raise NoSuchRepo(data['message'])
+			raise RepoNotFound(data['message'])
+		# e.g. https://api.github.com/repositories/738
+		elif data['message'] == 'Repository access blocked':
+			raise RepoAccessBlocked(data['message'])
 		else:
 			raise MetadataError(data['message'])
 	else:
@@ -152,8 +158,11 @@ def main():
 		id = int(id.rstrip())
 		try:
 			data = get_repo_metadata(id)
-		except NoSuchRepo:
-			print "404      %d"
+		except RepoNotFound:
+			print "404      %d" % (id,)
+			continue
+		except RepoAccessBlocked:
+			print "403      %d" % (id,)
 			continue
 		if want_repo(data):
 			directory = get_directory(data["id"])
