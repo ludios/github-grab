@@ -51,9 +51,17 @@ def get_iso_time():
 def get_git_version():
 	return subprocess.check_output(['git', '--version']).strip()
 
+def get_directory(id):
+	assert isinstance(id, (int, long)), id
+	# GitHub is at id ~47.5 million as of 2015-12-05; assume they
+	# won't have more than 10 billion repos and pad to 10 digits.
+	s = str(id).zfill(10)
+	# Don't put more than 10,000 repos in the last leaf dir
+	return s[:-4] + '/' + s + '.git'
+
 def clone(data):
 	url = "https://github.com/" + data['full_name']
-	out = "%d.git" % (data['id'],)
+	out = get_directory(data["id"])
 	assert not os.path.exists(out), out
 	# For finding repos cloned by a specific problematic server
 	hostname = socket.gethostname()
