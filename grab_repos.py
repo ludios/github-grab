@@ -5,11 +5,13 @@ __version__ = '0.1.0'
 import os
 import sys
 import json
+import time
 import pprint
 import shutil
 import socket
 import datetime
 import requests
+import traceback
 import subprocess
 
 def filter_repo_metadata(orig):
@@ -67,6 +69,28 @@ def upload_terastash(directory):
 def upload_noop(directory):
 	pass
 
+class Decayer(object):
+	def __init__(self, initial, multiplier, maximum):
+		"""
+		initial - initial number to return
+		multiplier - multiply number by this value after each call to decay()
+		maximum - cap number at this value
+		"""
+		self.initial = initial
+		self.multiplier = multiplier
+		self.maximum = maximum
+		self.reset()
+
+	def reset(self):
+		# First call to .decay() will multiply, but we want to get the `intitial`
+		# value on the first call to .decay(), so divide.
+		self.current = self.initial / self.multiplier
+		return self.current
+
+	def decay(self):
+		self.current = min(self.current * self.multiplier, self.maximum)
+		return self.current
+
 def clone(data, out):
 	url = "https://github.com/" + data['full_name']
 	assert not os.path.exists(out), out
@@ -74,7 +98,7 @@ def clone(data, out):
 	hostname = socket.gethostname()
 	fetched_at = get_iso_time()
 	git_version = get_git_version()
-	subprocess.check_call(["git", "clone", "--mirror", url, out])
+	subprocess.check_call(["git", "clone", "--quiet", "--mirror", url, out])
 	assert os.path.isdir(out), out
 
 	# Remove unneeded files
@@ -93,23 +117,48 @@ def clone(data, out):
 			"git_version": git_version,
 		}, f)
 
+def try_rmtree(p):
+	try:
+		shutil.rmtree(p)
+	except OSError:
+		pass
+	assert not os.path.exists(p), p
+
 def main():
 	if os.environ.get('GRAB_REPOS_UPLOADER') == 'terastash':
 		upload = upload_terastash
 	else:
 		upload = upload_noop
-	print "Using uploader %s" % (upload.__name__,)
+	print "UPLOADER %s" % (upload.__name__,)
 
 	for id in sys.stdin:
 		id = int(id.rstrip())
-		data = get_repo_metadata(id)
+		try:
+			data = get_repo_metadata(id)
+		except NoSuchRepo:
+			print "404      %d"
+			continue
 		if want_repo(data):
-			print "%d %s..." % (id, data['full_name'])
 			directory = get_directory(data["id"])
-			clone(data, directory)
+			print "CLONE    %d %s" % (id, data['full_name'])
+			decayer = Decayer(10, 2, 300)
+			for tries_left in reversed(xrange(10)):
+				try_rmtree(directory)
+				try:
+					clone(data, directory)
+				except Exception:
+					if tries_left == 0:
+						raise
+					traceback.print_exc(file=sys.stdout)
+					print "RETRY    %d" % (tries_left,)
+					time.sleep(decayer.decay())
+				else:
+					break
+			print "UPLOAD   %d" % (id,)
 			upload(directory)
+			print "DONE     %d" % (id,)
 		else:
-			print "%d %s unwanted" % (id, data['full_name'])
+			print "UNWANTED %d %s" % (id, data['full_name'])
 
 if __name__ == '__main__':
 	main()
