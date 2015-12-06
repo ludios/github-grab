@@ -100,6 +100,9 @@ class Decayer(object):
 		self.current = min(self.current * self.multiplier, self.maximum)
 		return self.current
 
+def has_unpacked_objects(out):
+	return bool(list(c for c in os.listdir(out + "/objects") if c not in ('info', 'pack')))
+
 def clone(data, out):
 	url = "https://github.com/" + data['full_name']
 	assert not os.path.exists(out), out
@@ -108,6 +111,8 @@ def clone(data, out):
 	fetched_at = get_iso_time()
 	git_version = get_git_version()
 	subprocess.check_call(["git", "clone", "--quiet", "--mirror", url, out])
+	if has_unpacked_objects(out):
+		subprocess.check_call(["git", "repack", "-A", "-d"], cwd=out)
 	assert os.path.isdir(out), out
 
 	# Remove unneeded files
