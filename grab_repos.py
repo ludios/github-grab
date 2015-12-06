@@ -59,9 +59,16 @@ def get_directory(id):
 	# Don't put more than 10,000 repos in the last leaf dir
 	return s[:-4] + '/' + s + '.git'
 
-def clone(data):
+def upload_terastash(directory):
+	assert not "'" in directory, directory
+	subprocess.check_call("find '%s' -type f -print0 | xargs -0 ts add" % (directory,), shell=True)
+	shutil.rmtree(directory)
+
+def upload_noop(directory):
+	pass
+
+def clone(data, out):
 	url = "https://github.com/" + data['full_name']
-	out = get_directory(data["id"])
 	assert not os.path.exists(out), out
 	# For finding repos cloned by a specific problematic server
 	hostname = socket.gethostname()
@@ -87,12 +94,20 @@ def clone(data):
 		}, f)
 
 def main():
+	if os.environ.get('GRAB_REPOS_UPLOADER') == 'terastash':
+		upload = upload_terastash
+	else:
+		upload = upload_noop
+	print "Using uploader %s" % (upload.__name__,)
+
 	for id in sys.stdin:
 		id = int(id.rstrip())
 		data = get_repo_metadata(id)
 		if want_repo(data):
 			print "%d %s..." % (id, data['full_name'])
-			clone(data)
+			directory = get_directory(data["id"])
+			clone(data, directory)
+			upload(directory)
 		else:
 			print "%d %s unwanted" % (id, data['full_name'])
 
