@@ -146,6 +146,9 @@ def main():
 	print "UPLOADER %s" % (upload.__name__,)
 
 	for id in sys.stdin:
+		if os.path.exists('stop'):
+			print "STOPPING because 'stop' file is present"
+			break
 		id = int(id.rstrip())
 		try:
 			data = get_repo_metadata(id)
