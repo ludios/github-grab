@@ -9,6 +9,7 @@ import time
 import pprint
 import shutil
 import socket
+import random
 import datetime
 import requests
 import traceback
@@ -30,8 +31,16 @@ class NoSuchRepo(Exception):
 class MetadataError(Exception):
 	pass
 
+api_tokens = os.environ.get('GITHUB_API_TOKENS', '').split()
+if api_tokens == [""]:
+	api_tokens = []
+
 def get_repo_metadata(id):
-	text = requests.get('https://api.github.com/repositories/%d' % (id,)).text
+	headers = {}
+	if api_tokens:
+		token = random.choice(api_tokens)
+		headers['Authorization'] = 'token %s' % (token,)
+	text = requests.get('https://api.github.com/repositories/%d' % (id,), headers=headers).text
 	data = json.loads(text)
 	if 'message' in data:
 		if data['message'] == 'Not Found':
