@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 import os
 import sys
 import json
 import time
-import pprint
 import shutil
 import socket
 import random
@@ -144,31 +143,34 @@ def try_rmtree(p):
 		pass
 	assert not os.path.exists(p), p
 
+def log(symbol, text):
+	print get_iso_time(), symbol.ljust(8), text
+
 def main():
 	if os.environ.get('GRAB_REPOS_UPLOADER') == 'terastash':
 		upload = upload_terastash
 	else:
 		upload = upload_noop
-	print "UPLOADER %s" % (upload.__name__,)
+	log("UPLOADER", upload.__name__)
 
 	for id in sys.stdin:
 		if os.path.exists('stop'):
-			print "STOPPING because 'stop' file is present"
+			log("STOPPING", "because 'stop' file is present")
 			break
 		id = int(id.rstrip())
 		try:
 			data = get_repo_metadata(id)
 		except RepoNotFound:
-			print "404      %d" % (id,)
+			log("404", id)
 			continue
 		except RepoAccessBlocked:
-			print "403      %d" % (id,)
+			log("403", id)
 			continue
 		if want_repo(data):
 			directory = get_directory(data["id"])
 			# Assert the exact length since we're running a dangerous rmtree below
 			assert len(directory) == 21, len(directory)
-			print "CLONE    %d %s" % (id, data['full_name'])
+			log("CLONE", "%d %s" % (id, data['full_name']))
 			decayer = Decayer(2, 2, 300)
 			for tries_left in reversed(xrange(10)):
 				try_rmtree(directory)
@@ -178,15 +180,15 @@ def main():
 					if tries_left == 0:
 						raise
 					traceback.print_exc(file=sys.stdout)
-					print "RETRY    %d" % (tries_left,)
+					log("RETRY", tries_left)
 					time.sleep(decayer.decay())
 				else:
 					break
-			print "UPLOAD   %d" % (id,)
+			log("UPLOAD", id)
 			upload(directory)
-			print "DONE     %d" % (id,)
+			log("DONE", id)
 		else:
-			print "UNWANTED %d %s" % (id, data['full_name'])
+			log("UNWANTED", "%d %s" % (id, data['full_name']))
 
 if __name__ == '__main__':
 	main()
