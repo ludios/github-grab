@@ -112,7 +112,7 @@ def clone(data, out):
 	git_version = get_git_version()
 	subprocess.check_call(["git", "clone", "--quiet", "--mirror", url, out])
 	if has_unpacked_objects(out):
-		subprocess.check_call(["git", "repack", "-A", "-d"], cwd=out)
+		subprocess.check_call(["git", "repack", "-q", "-A", "-d"], cwd=out)
 	assert os.path.isdir(out), out
 
 	# Remove unneeded files
