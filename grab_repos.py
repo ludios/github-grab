@@ -140,6 +140,8 @@ def main():
 			continue
 		if want_repo(data):
 			directory = get_directory(data["id"])
+			# Assert the exact length since we're running a dangerous rmtree below
+			assert len(directory) == 21, len(directory)
 			print "CLONE    %d %s" % (id, data['full_name'])
 			decayer = Decayer(10, 2, 300)
 			for tries_left in reversed(xrange(10)):
