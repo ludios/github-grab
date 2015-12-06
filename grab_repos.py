@@ -1,9 +1,12 @@
 #!/usr/bin/env python
 
+import os
 import sys
 import json
 import pprint
+import shutil
 import requests
+import subprocess
 
 def filter_repo_metadata(orig):
 	data = orig.copy()
@@ -34,14 +37,36 @@ def get_repo_metadata(id):
 
 def want_repo(data):
 	# We'll get forks later
-	if data["fork"]:
+	if data['fork']:
 		return False
 	return True
+
+def clone(data):
+	url = "https://github.com/" + data['full_name']
+	out = "%d.git" % (data['id'],)
+	assert not os.path.exists(out), out
+	subprocess.check_call(["git", "clone", "--mirror", url, out])
+	assert os.path.isdir(out), out
+
+	# Remove unneeded files
+	os.unlink(out + "/description")
+	shutil.rmtree(out + "/hooks")
+	shutil.rmtree(out + "/info")
+
+	# Write out metadata
+	assert not os.path.exists(out + '/metadata.json'), out
+	with open(out + '/metadata.json', 'wb') as f:
+		json.dump({"api.github.com": data}, f)
 
 def main():
 	for id in sys.stdin:
 		id = int(id.rstrip())
-		pprint.pprint(get_repo_metadata(id))
+		data = get_repo_metadata(id)
+		if want_repo(data):
+			print "%d %s..." % (id, data['full_name'])
+			clone(data)
+		else:
+			print "%d %s unwanted" % (id, data['full_name'])
 
 if __name__ == '__main__':
 	main()
