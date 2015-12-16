@@ -33,14 +33,9 @@ class RepoAccessBlocked(Exception):
 class MetadataError(Exception):
 	pass
 
-api_tokens = os.environ.get('GITHUB_API_TOKENS', '').split()
-if api_tokens == [""]:
-	api_tokens = []
-
-def get_repo_metadata(id):
+def get_repo_metadata(id, token=None):
 	headers = {}
-	if api_tokens:
-		token = random.choice(api_tokens)
+	if token is not None:
 		headers['Authorization'] = 'token %s' % (token,)
 	text = requests.get('https://api.github.com/repositories/%d' % (id,), headers=headers).text
 	data = json.loads(text)
@@ -143,7 +138,7 @@ def try_rmtree(p):
 		pass
 	assert not os.path.exists(p), p
 
-def log(symbol, text):
+def log(symbol, text=""):
 	print get_iso_time(), symbol.ljust(8), text
 
 def retry(func, retry_on=Exception):
@@ -160,20 +155,54 @@ def retry(func, retry_on=Exception):
 		else:
 			break
 
+def get_repo_id_and_api_key_from_stdin_and_env():
+	line = sys.stdin.readline()
+	if not line:
+		return None, None
+	id = int(line.rstrip())
+	api_tokens = os.environ.get('GITHUB_API_TOKENS', '').split()
+	if api_tokens == [""]:
+		api_tokens = []
+	token = random.choice(api_tokens) if api_tokens else None
+	return id, token
+
+def get_repo_id_and_api_key_from_distributor(distributor_url_next):
+	def f():
+		resp = retry(
+			lambda: requests.post(
+				distributor_url_next,
+				data={'worker': os.environ['GRAB_REPOS_WORKER']}
+			), requests.exceptions.ConnectionError)
+		data = json.loads(resp.text)
+		if data is None:
+			return None, None
+		return data['repo_id'], data['api_key']
+	return f
+
 def main():
 	if os.environ.get('GRAB_REPOS_UPLOADER') == 'terastash':
 		upload = upload_terastash
 	else:
 		upload = upload_noop
+
+	if os.environ.get('GRAB_REPOS_SOURCE', '').startswith('http://'):
+		distributor_url_next = os.environ['GRAB_REPOS_SOURCE']
+		get_repo_id_and_api_key = get_repo_id_and_api_key_from_distributor(distributor_url_next)
+	else:
+		get_repo_id_and_api_key = get_repo_id_and_api_key_from_stdin_and_env
+
 	log("UPLOADER", upload.__name__)
 
-	for id in sys.stdin:
+	while True:
 		if os.path.exists('stop'):
 			log("STOPPING", "because 'stop' file is present")
 			break
-		id = int(id.rstrip())
+		id, token = get_repo_id_and_api_key()
+		if id is None:
+			log("FINISHED")
+			break
 		try:
-			data = retry(lambda: get_repo_metadata(id), requests.exceptions.ConnectionError)
+			data = retry(lambda: get_repo_metadata(id, token), requests.exceptions.ConnectionError)
 		except RepoNotFound:
 			log("404", id)
 			continue
