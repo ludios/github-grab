@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-__version__ = '0.2.0'
+__version__ = '0.3.0'
 
 import os
 import sys
@@ -146,12 +146,12 @@ def try_rmtree(p):
 def log(symbol, text):
 	print get_iso_time(), symbol.ljust(8), text
 
-def retry(func):
+def retry(func, retry_on=Exception):
 	decayer = Decayer(2, 2, 300)
 	for tries_left in reversed(xrange(10)):
 		try:
 			return func()
-		except Exception:
+		except retry_on:
 			if tries_left == 0:
 				raise
 			traceback.print_exc(file=sys.stdout)
@@ -173,7 +173,7 @@ def main():
 			break
 		id = int(id.rstrip())
 		try:
-			data = get_repo_metadata(id)
+			data = retry(lambda: get_repo_metadata(id), requests.exceptions.ConnectionError)
 		except RepoNotFound:
 			log("404", id)
 			continue
