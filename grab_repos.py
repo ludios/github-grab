@@ -146,6 +146,20 @@ def try_rmtree(p):
 def log(symbol, text):
 	print get_iso_time(), symbol.ljust(8), text
 
+def retry(func):
+	decayer = Decayer(2, 2, 300)
+	for tries_left in reversed(xrange(10)):
+		try:
+			return func()
+		except Exception:
+			if tries_left == 0:
+				raise
+			traceback.print_exc(file=sys.stdout)
+			log("RETRY", tries_left)
+			time.sleep(decayer.decay())
+		else:
+			break
+
 def main():
 	if os.environ.get('GRAB_REPOS_UPLOADER') == 'terastash':
 		upload = upload_terastash
@@ -166,29 +180,22 @@ def main():
 		except RepoAccessBlocked:
 			log("403", id)
 			continue
-		if want_repo(data):
-			directory = get_directory(data["id"])
-			# Assert the exact length since we're running a dangerous rmtree below
-			assert len(directory) == 21, len(directory)
-			log("CLONE", "%d %s" % (id, data['full_name']))
-			decayer = Decayer(2, 2, 300)
-			for tries_left in reversed(xrange(10)):
-				try_rmtree(directory)
-				try:
-					clone(data, directory)
-				except Exception:
-					if tries_left == 0:
-						raise
-					traceback.print_exc(file=sys.stdout)
-					log("RETRY", tries_left)
-					time.sleep(decayer.decay())
-				else:
-					break
-			log("UPLOAD", id)
-			upload(directory)
-			log("DONE", id)
-		else:
+
+		if not want_repo(data):
 			log("UNWANTED", "%d %s" % (id, data['full_name']))
+			continue
+
+		directory = get_directory(data["id"])
+		# Assert the exact length since we're running a dangerous rmtree below
+		assert len(directory) == 21, len(directory)
+		log("CLONE", "%d %s" % (id, data['full_name']))
+		def rm_and_clone():
+			try_rmtree(directory)
+			clone(data, directory)
+		retry(rm_and_clone)
+		log("UPLOAD", id)
+		upload(directory)
+		log("DONE", id)
 
 if __name__ == '__main__':
 	main()
