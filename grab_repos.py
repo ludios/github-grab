@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-__version__ = '0.3.0'
+__version__ = '0.3.1'
 
 import os
 import sys
@@ -104,7 +104,8 @@ def has_unpacked_objects(out):
 	return bool(list(c for c in os.listdir(out + "/objects") if c not in ('info', 'pack')))
 
 def clone(data, out):
-	url = "https://github.com/" + data['full_name']
+	# Use a user:password to avoid getting a user+password prompt on deleted repos
+	url = "https://anonymous:anonymous@github.com/" + data['full_name']
 	assert not os.path.exists(out), out
 	# For finding repos cloned by a specific problematic server
 	hostname = socket.gethostname()
